@@ -50,15 +50,6 @@ class Parameters:
 class FeedForwardSubNet(tf.keras.Model):
     def __init__(self, para):
         super(FeedForwardSubNet, self).__init__()
-        #self.bn_layers = [
-        #    tf.keras.layers.BatchNormalization(
-        #        momentum=0.99,
-        #        epsilon=1e-6,
-        #        beta_initializer=tf.random_normal_initializer(0.0, stddev=0.1,seed=1),
-        #        gamma_initializer=tf.random_uniform_initializer(0.1, 0.5,seed=1)
-        #    )
-        #    for _ in range(len(para.num_hiddens) + 1)]
-        # 隐藏层个数
         self.dense_layers = [tf.keras.layers.Dense(para.num_hiddens[i],
                                                    use_bias=True,
                                                    activation=None,
@@ -70,7 +61,6 @@ class FeedForwardSubNet(tf.keras.Model):
                                                    )
                              for i in range(len(para.num_hiddens))]
 
-    # 每一层做relu激活，最后一层直接输出
     def call(self, inputs):
         x = inputs
         #x = self.bn_layers[0](inputs,training=False)
@@ -265,7 +255,6 @@ class solver():
         with open('case1a_non_constrained.pickle', 'rb') as dualfile2:
             n_iterations, n_losses, loss, penalty, list_x1, n_list_z1, list_p1, list_eta1, n_list_v1_bar, list_v1, list_x2, n_list_z2, list_p2, list_eta2, n_list_v2_bar, list_v2, train_var, elapsed_time = pickle.load(dualfile2)
 
-        # 绘制迭代次数和损失函数曲线图
         #plt.figure(figsize=(8, 6))
         #plt.plot(c_iterations, c_losses, linewidth=2.5)
         #plt.xlabel('Iterations')
