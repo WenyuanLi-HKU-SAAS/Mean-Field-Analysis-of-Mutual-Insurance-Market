@@ -278,8 +278,6 @@ class solver():
               'x2_95q = ', np.percentile(list_x2[-1], 95.0, axis=0), 'x2 gap = ',
               np.percentile(list_x2[-1], 95.0, axis=0) - np.percentile(list_x2[-1], 5.0, axis=0))
 
-
-        # 绘制迭代次数和损失函数曲线图
         plt.figure(figsize=(8, 6))
         plt.plot(iterations, losses, linewidth=2.5)
         plt.xlabel('Iterations')
