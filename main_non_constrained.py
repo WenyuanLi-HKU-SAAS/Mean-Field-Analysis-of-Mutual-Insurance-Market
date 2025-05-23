@@ -53,7 +53,6 @@ class Parameters:
 class FeedForwardSubNet(tf.keras.Model):
     def __init__(self, para):
         super(FeedForwardSubNet, self).__init__()
-        # 隐藏层个数
         self.dense_layers = [tf.keras.layers.Dense(para.num_hiddens[i],
                                                    use_bias=True,
                                                    activation=None,
@@ -64,7 +63,6 @@ class FeedForwardSubNet(tf.keras.Model):
                                                    )
                              for i in range(len(para.num_hiddens))]
 
-    # 每一层做relu激活，最后一层直接输出
     def call(self, inputs):
         x = inputs
         for i in range(len(self.dense_layers) - 1):
@@ -311,7 +309,7 @@ class solver():
             total_error = total_error + tf.math.abs(a_i-b_i)
         total_error = total_error/tf.cast(self.para.N_2-1, dtype=tf.float32)
         print("total error = ", total_error)
-        # 绘制迭代次数和损失函数曲线图
+        
         plt.figure(figsize=(8, 6))
         plt.plot(iterations, losses, linewidth=2.5)
         #plt.xlim(left=-1)
