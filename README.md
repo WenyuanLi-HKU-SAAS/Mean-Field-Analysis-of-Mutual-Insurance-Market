@@ -5,8 +5,8 @@ These are the codes for the paper ``Mean-Field-Analysis-of-Mutual-Insurance-Mark
 
 ``main_non_constrained_maketable.py'' is making the table for errors between the ODE explicit solution and the deep learning algorithm
 
-``main_non_constrained.py'' is to compute the single case under non-constrained settings
+``main_non_constrained.py'' is computing the single case under non-constrained settings
 
-``main_constrained.py'' is to compute the single case under constrained settings
+``main_constrained.py'' is computing the single case under constrained settings
 
 ``main_plot.py'' is for plotting figures.
