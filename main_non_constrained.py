@@ -36,9 +36,10 @@ class Parameters:
     # time steps
     N_2: int = 101
     del_t: float = T / tf.cast(N_2-1, dtype=tf.float32)
-    # Brownian motion
+    # Brownian motion for plain Monte Carlo
     np.random.seed(1)
     dW_t = tf.cast(np.random.standard_normal((N_1, N_2, 2))*np.sqrt(del_t),dtype=tf.float32)
+    # Brownian motion for Quasi Monte Carlo
     #sampler = qmc.Sobol(d=N_2, scramble=False)
     #sampler.fast_forward(n=2 * N_2)
     #sample = sampler.random(n=N_1)
@@ -75,8 +76,6 @@ class opt_loss(tf.keras.Model):
     def __init__(self, para):
         super().__init__()
         self.para = para
-        #self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.para.lr_init_values)
-        # initialize rnn trainable variables
         # nn for v1_bar
         self.nn1 = FeedForwardSubNet(para)
         # nn for v2_bar
