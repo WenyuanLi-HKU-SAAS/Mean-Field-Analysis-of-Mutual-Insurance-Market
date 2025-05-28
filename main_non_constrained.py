@@ -360,5 +360,5 @@ class solver():
 if __name__ == '__main__':
     para = Parameters()
     MVBSDE_solver = solver(para)
-    #MVBSDE_solver.train()
+    MVBSDE_solver.train()
     MVBSDE_solver.plot()
