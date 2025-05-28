@@ -75,7 +75,6 @@ class opt_loss(tf.keras.Model):
     def __init__(self, para):
         super().__init__()
         self.para = para
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.para.lr_init_values)
         # nn for v1_bar
         self.nn1 = FeedForwardSubNet(para)
         # nn for v2_bar
