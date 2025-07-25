@@ -259,19 +259,15 @@ class solver():
         #relative error
         rel_error = tf.constant(0.0)
         max_b = tf.reduce_max(tf.abs(ODE_list_vbar_1))
-        min_b = tf.reduce_min(ODE_list_vbar_1)
         for a_i, b_i in zip(list_v1_bar, ODE_list_vbar_1):
             rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
         max_b = tf.reduce_max(tf.abs(ODE_list_vbar_2))
-        min_b = tf.reduce_min(ODE_list_vbar_2)
         for a_i, b_i in zip(list_v2_bar, ODE_list_vbar_2):
             rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
         max_b = tf.reduce_max(tf.abs(ODE_list_z_1))
-        min_b = tf.reduce_min(ODE_list_z_1)
         for a_i, b_i in zip(list_z1, ODE_list_z_1):
             rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
         max_b = tf.reduce_max(tf.abs(ODE_list_z_2))
-        min_b = tf.reduce_min(ODE_list_z_2)
         for a_i, b_i in zip(list_z2, ODE_list_z_2):
             rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
         rel_error = rel_error / tf.cast(self.para.N_2, dtype=tf.float32)/4.0
