@@ -244,35 +244,59 @@ class solver():
         ODE_list_z_1 = [row[0, 0] for row in ODE_list_z[:-1]]
         ODE_list_z_2 = [row[1, 0] for row in ODE_list_z[:-1]]
 
-        total_error = tf.constant(0.0)
+        #abs_error
+        abs_error = tf.constant(0.0)
         for a_i, b_i in zip(list_v1_bar, ODE_list_vbar_1):
-            total_error = total_error + tf.math.abs(a_i - b_i)
+            abs_error = abs_error + tf.math.abs(a_i - b_i)
         for a_i, b_i in zip(list_v2_bar, ODE_list_vbar_2):
-            total_error = total_error + tf.math.abs(a_i - b_i)
+            abs_error = abs_error + tf.math.abs(a_i - b_i)
         for a_i, b_i in zip(list_z1, ODE_list_z_1):
-            total_error = total_error + tf.math.abs(a_i - b_i)
+            abs_error = abs_error + tf.math.abs(a_i - b_i)
         for a_i, b_i in zip(list_z2, ODE_list_z_2):
-            total_error = total_error + tf.math.abs(a_i - b_i)
-        total_error = total_error / tf.cast(self.para.N_2, dtype=tf.float32)
+            abs_error = abs_error + tf.math.abs(a_i - b_i)
+        abs_error = abs_error / tf.cast(self.para.N_2, dtype=tf.float32)/4.0
 
-        return loss, penalty, total_error, elapsed_time
+        #relative error
+        rel_error = tf.constant(0.0)
+        max_b = tf.reduce_max(tf.abs(ODE_list_vbar_1))
+        min_b = tf.reduce_min(ODE_list_vbar_1)
+        for a_i, b_i in zip(list_v1_bar, ODE_list_vbar_1):
+            rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
+        max_b = tf.reduce_max(tf.abs(ODE_list_vbar_2))
+        min_b = tf.reduce_min(ODE_list_vbar_2)
+        for a_i, b_i in zip(list_v2_bar, ODE_list_vbar_2):
+            rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
+        max_b = tf.reduce_max(tf.abs(ODE_list_z_1))
+        min_b = tf.reduce_min(ODE_list_z_1)
+        for a_i, b_i in zip(list_z1, ODE_list_z_1):
+            rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
+        max_b = tf.reduce_max(tf.abs(ODE_list_z_2))
+        min_b = tf.reduce_min(ODE_list_z_2)
+        for a_i, b_i in zip(list_z2, ODE_list_z_2):
+            rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
+        rel_error = rel_error / tf.cast(self.para.N_2, dtype=tf.float32)/4.0
 
-
+        return loss, penalty, abs_error, rel_error, elapsed_time, list_v1_bar, list_v2_bar, list_z1, list_z2
 
 
 if __name__ == '__main__':
     para = Parameters()
     vec_lam = tf.cast(np.array([0.1,1.0,10.0,100.0,1000.0]),dtype=tf.float32)
-    #vec_lam = tf.cast(np.array([0.1]), dtype=tf.float32)
-    ans_list = np.zeros((4,5))
+    ans_list = np.zeros((5,5))
     for j in range(5):
         para.lam = vec_lam[j]
         MVBSDE_solver = solver(para)
-        [loss, penalty, total_error, elapsed_time] = MVBSDE_solver.train()
+        [loss, penalty, abs_error, rel_error, elapsed_time,  list_v1_bar, list_v2_bar, list_z1, list_z2] = MVBSDE_solver.train()
         ans_list[0,j] = loss
         ans_list[1,j] = penalty
-        ans_list[2,j] = total_error
-        ans_list[3,j] = elapsed_time
-        print("lambda = ", para.lam, "total error = ", total_error, "time_elapsed = ", elapsed_time)
+        ans_list[2,j] = abs_error
+        ans_list[3,j] = rel_error
+        ans_list[4,j] = elapsed_time
+        print("lambda = ", para.lam.numpy(), "abs_error = ", abs_error.numpy(), "rel_error = ", rel_error.numpy(), "time_elapsed = ", elapsed_time)
+        with open('lam{}_case1a_constrained.pickle'.format(j), 'wb') as dualfile:
+            pickle.dump([loss, penalty, abs_error, rel_error, elapsed_time,  list_v1_bar, list_v2_bar, list_z1, list_z2], dualfile)
+        print("Result saved!")
+        if(j==0):
+            print('haha')
 
     print("ans_list = ", ans_list)
