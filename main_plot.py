@@ -12,7 +12,7 @@ class Parameters:
     a: float = 0.0
     b: float = 1.0
     r: float = 0.03
-    l = tf.cast(np.array([[0.02,0.02]]),dtype=tf.float32)
+    l = tf.cast(np.array([[0.02,0.2]]),dtype=tf.float32)
     P = tf.cast(np.array([[1.0,1.0]]),dtype=tf.float32)
     mat_P = tf.linalg.diag(tf.squeeze(P))
     Q = tf.cast(np.array([[1.0,1.0]]),dtype=tf.float32)
@@ -23,13 +23,13 @@ class Parameters:
     mat_S = tf.linalg.diag(tf.squeeze(S))
     k = tf.cast(np.array([[0.5,0.5]]),dtype=tf.float32)
     K = tf.linalg.diag(tf.squeeze(k))
-    sig = tf.cast(np.array([[0.1,0.3]]),dtype=tf.float32)
+    sig = tf.cast(np.array([[0.3,0.3]]),dtype=tf.float32)
     Sig = tf.linalg.diag(tf.squeeze(sig))
     gamma = tf.cast(np.array([[1.0,1.0]]),dtype=tf.float32)
     xi = tf.cast(np.array([[2.0,2.0]]),dtype=tf.float32)
     omega = tf.cast(np.array([[0.5,0.5]]),dtype=tf.float32)
     pi = tf.cast(np.array([[1.0,1.0]]),dtype=tf.float32)
-    lam = tf.constant(10.0)
+    lam = tf.constant(1.0)
     d: float = 0.05
     T: float = 1.0
     # path number
@@ -50,6 +50,15 @@ class Parameters:
 class FeedForwardSubNet(tf.keras.Model):
     def __init__(self, para):
         super(FeedForwardSubNet, self).__init__()
+        #self.bn_layers = [
+        #    tf.keras.layers.BatchNormalization(
+        #        momentum=0.99,
+        #        epsilon=1e-6,
+        #        beta_initializer=tf.random_normal_initializer(0.0, stddev=0.1,seed=1),
+        #        gamma_initializer=tf.random_uniform_initializer(0.1, 0.5,seed=1)
+        #    )
+        #    for _ in range(len(para.num_hiddens) + 1)]
+        # 隐藏层个数
         self.dense_layers = [tf.keras.layers.Dense(para.num_hiddens[i],
                                                    use_bias=True,
                                                    activation=None,
@@ -61,6 +70,7 @@ class FeedForwardSubNet(tf.keras.Model):
                                                    )
                              for i in range(len(para.num_hiddens))]
 
+    # 每一层做relu激活，最后一层直接输出
     def call(self, inputs):
         x = inputs
         #x = self.bn_layers[0](inputs,training=False)
@@ -249,12 +259,28 @@ class solver():
         return loss
 
     def plot(self):
+
+        with open('case1a_unconstrained.pickle', 'rb') as dualfile2:
+            #iterations, losses, loss, penalty, list_x1, n_list_z1, list_p1, list_eta1, n_list_v1_bar, list_v1, list_x2, n_list_z2, list_p2, list_eta2, n_list_v2_bar, list_v2, train_var, elapsed_time  = pickle.load(dualfile2)
+            loss, penalty, abs_error, rel_error, elapsed_time, n_list_v1_bar, n_list_v2_bar, n_list_z1, n_list_z2 = pickle.load(dualfile2)
+        print('n_list_v1_bar0 = ', n_list_v1_bar[0].numpy(), 'n_list_v1_barT = ', n_list_v1_bar[-1].numpy())
+        print('n_list_v2_bar0 = ', n_list_v2_bar[0].numpy(), 'n_list_v2_barT = ', n_list_v2_bar[-1].numpy())
+        print('n_list_z1_bar0 = ', n_list_z1[0].numpy(), 'n_list_z1_barT = ', n_list_z1[-1].numpy())
+        print('min_n_z1 = ', tf.reduce_min(n_list_z1).numpy(),'max_n_z1 = ', tf.reduce_max(n_list_z1).numpy())
+        print('n_list_z2_bar0 = ', n_list_z2[0].numpy(), 'n_list_z2_barT = ', n_list_z2[-1].numpy())
+        print('min_n_z2 = ', tf.reduce_min(n_list_z2).numpy(),'max_n_z2 = ', tf.reduce_max(n_list_z2).numpy())
+
         with open('case1a_constrained.pickle', 'rb') as dualfile1:
             c_iterations, c_losses, elapsed_time, loss, penalty, list_x1, c_list_z1, list_p1, list_eta1, c_list_v1_bar, list_v1, list_x2, c_list_z2, list_p2, list_eta2, c_list_v2_bar, list_v2, train_var = pickle.load(dualfile1)
 
-        with open('case1a_non_constrained.pickle', 'rb') as dualfile2:
-            n_iterations, n_losses, loss, penalty, list_x1, n_list_z1, list_p1, list_eta1, n_list_v1_bar, list_v1, list_x2, n_list_z2, list_p2, list_eta2, n_list_v2_bar, list_v2, train_var, elapsed_time = pickle.load(dualfile2)
+        print('c_list_v1_bar0 = ', c_list_v1_bar[0].numpy(), 'c_list_v1_barT = ', c_list_v1_bar[-1].numpy())
+        print('c_list_v2_bar0 = ', c_list_v2_bar[0].numpy(), 'c_list_v2_barT = ', c_list_v2_bar[-1].numpy())
+        print('c_list_z1_0 = ', c_list_z1[0].numpy(), 'c_list_z1_T = ', c_list_z1[-1].numpy())
+        print('min_c_z1 = ', tf.reduce_min(c_list_z1).numpy(),'max_c_z1 = ', tf.reduce_max(c_list_z1).numpy())
+        print('c_list_z2_0 = ', c_list_z2[0].numpy(), 'c_list_z2_T = ', c_list_z2[-1].numpy())
+        print('min_c_z2 = ', tf.reduce_min(c_list_z2).numpy(),'max_c_z2 = ', tf.reduce_max(c_list_z2).numpy())
 
+        # 绘制迭代次数和损失函数曲线图
         #plt.figure(figsize=(8, 6))
         #plt.plot(c_iterations, c_losses, linewidth=2.5)
         #plt.xlabel('Iterations')
@@ -265,26 +291,28 @@ class solver():
         vec_t = np.arange(0, self.para.N_2-1) * self.para.del_t
         plt.figure(figsize=(8, 6))
         n_list_v_bar_1 = [row[0] for row in n_list_v1_bar]
-        plt.plot(vec_t, n_list_v_bar_1,color=[0, 0.4470, 0.7410],label=r'$\bar{v}^1_t(\sigma^1=0.1), w/o$',linewidth=2.5)
+        plt.plot(vec_t, n_list_v_bar_1,color=[0, 0.4470, 0.7410],label=r'$\bar{v}^1_t(\gamma^1=0.5), w/o$',linewidth=2.5)
         n_list_v_bar_2 = [row[0] for row in n_list_v2_bar]
-        plt.plot(vec_t, n_list_v_bar_2,color=[0.9290,0.6940,0.1250],label=r'$\bar{v}^2_t(\sigma^2=0.3), w/o$',linewidth=2.5)
+        plt.plot(vec_t, n_list_v_bar_2,color=[0.9290,0.6940,0.1250],label=r'$\bar{v}^2_t(\gamma^2=3.0), w/o$',linewidth=2.5)
         c_list_v_bar_1 = [row[0] for row in c_list_v1_bar]
-        plt.plot(vec_t, c_list_v_bar_1,'-.',color=[0, 0.4470, 0.7410], label=r'$\bar{v}^1_t(\sigma^1=0.1), with$',linewidth=2.5)
+        plt.plot(vec_t, c_list_v_bar_1,'-.',color=[0, 0.4470, 0.7410], label=r'$\bar{v}^1_t(\gamma^1=0.5), with$',linewidth=2.5)
         c_list_v_bar_2 = [row[0] for row in c_list_v2_bar]
-        plt.plot(vec_t, c_list_v_bar_2, '-.', color=[0.9290,0.6940,0.1250],label=r'$\bar{v}^2_t(\sigma^2=0.3), with$',linewidth=2.5)
-        plt.legend(prop = { "size": 12 })
+        plt.plot(vec_t, c_list_v_bar_2, '-.', color=[0.9290,0.6940,0.1250],label=r'$\bar{v}^2_t(\gamma^2=3.0), with$',linewidth=2.5)
+        #plt.legend(loc='upper left', bbox_to_anchor=(0.0, 0.7), prop = { "size": 12 })
+        plt.legend(prop={"size": 12})
         plt.xlim(left=tf.reduce_min(vec_t))
         plt.xlim(right=tf.reduce_max(vec_t))
-        plt.ylim(bottom = -0.06931072)
-        plt.ylim(top = 0.43997332)
-        #plt.ylim(bottom = -0.27604288)
-        #plt.ylim(top = 0.44370133)
-        #plt.ylim(bottom=-0.27740395)
-        #plt.ylim(top=0.42925632)
-        #plt.ylim(bottom=0.01129037)
-        #plt.ylim(top=0.47372812)
-        #plt.ylim(bottom=0.02894437)
-        #plt.ylim(top=0.4663539)
+        #plt.ylim(bottom=-0.26443166)
+        #plt.ylim(top=0.43274432)
+        #Case 3
+        #plt.ylim(bottom=-0.28056288)
+        #plt.ylim(top=0.4323909)
+        #Case 4
+        #plt.ylim(bottom=0.00680643)
+        #plt.ylim(top=0.5025271)
+        #Case 5
+        #plt.ylim(bottom=0.08968228)
+        #plt.ylim(top=0.19359356)
         plt.xlabel(r'$t$')
         #plt.ylabel(r'$E[\theta_1]$')
         # plt.title('Expected theta')
@@ -293,33 +321,36 @@ class solver():
         vec_t = np.arange(0, self.para.N_2) * self.para.del_t
         plt.figure(figsize=(8, 6))
         n_list_z_1 = [row[0] for row in n_list_z1]
-        plt.plot(vec_t, n_list_z_1,color=[0, 0.4470, 0.7410],label=r'$z^1_t(\sigma^1=0.1), w/o$',linewidth=2.5)
+        plt.plot(vec_t, n_list_z_1,color=[0, 0.4470, 0.7410],label=r'$z^1_t(\gamma^1=0.5), w/o$',linewidth=2.5)
         n_list_z_2 = [row[0] for row in n_list_z2]
-        plt.plot(vec_t, n_list_z_2,color=[0.9290,0.6940,0.1250],label=r'$z^2_t(\sigma^2=0.3), w/o$',linewidth=2.5)
+        plt.plot(vec_t, n_list_z_2,color=[0.9290,0.6940,0.1250],label=r'$z^2_t(\gamma^2=3.0), w/o$',linewidth=2.5)
         c_list_z_1 = [row[0] for row in c_list_z1]
-        plt.plot(vec_t, c_list_z_1, '-.',color=[0, 0.4470, 0.7410], label=r'$z^1_t(\sigma^1=0.1), with$',linewidth=2.5)
+        plt.plot(vec_t, c_list_z_1, '-.',color=[0, 0.4470, 0.7410], label=r'$z^1_t(\gamma^1=0.5), with$',linewidth=2.5)
         c_list_z_2 = [row[0] for row in c_list_z2]
-        plt.plot(vec_t, c_list_z_2, '-.', color=[0.9290,0.6940,0.1250],label=r'$z^2_t(\sigma^2=0.3), with$',linewidth=2.5)
+        plt.plot(vec_t, c_list_z_2, '-.', color=[0.9290,0.6940,0.1250],label=r'$z^2_t(\gamma^2=3.0), with$',linewidth=2.5)
         plt.legend(prop = { "size": 12 },loc='upper left')
         plt.xlim(left=tf.reduce_min(vec_t))
         plt.xlim(right=tf.reduce_max(vec_t))
-        plt.ylim(bottom = 2.0)
-        plt.ylim(top = 2.1067855)
-        #plt.ylim(bottom=1.9622346)
-        #plt.ylim(top=2.1916187)
-        #plt.ylim(bottom=1.9952081)
-        #plt.ylim(top=2.1436605)
+        #Case 2
         #plt.ylim(bottom=2.0)
-        #plt.ylim(top=2.1484828)
-        #plt.ylim(bottom=1.9854703)
-        #plt.ylim(top=2.2154238)
+        #plt.ylim(top=2.1472669)
+        #Case 3
+        #plt.ylim(bottom=1.998191)
+        #plt.ylim(top=2.1305277)
+        #Case 4
+        #plt.ylim(bottom=1.9749559)
+        #plt.ylim(top=2.2393277)
+        #Case 5
+        #plt.ylim(bottom=2.0)
+        #plt.ylim(top=2.2682111)
         plt.xlabel(r'$t$')
         #plt.ylabel(r'$E[\theta_1]$')
-        # plt.title('Expected theta')
+        #plt.title('Expected theta')
         plt.show()
 
 
 if __name__ == '__main__':
     para = Parameters()
     MVBSDE_solver = solver(para)
+    #MVBSDE_solver.train()
     MVBSDE_solver.plot()

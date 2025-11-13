@@ -4,6 +4,8 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 import pickle
 import time
 import matplotlib.pyplot as plt
+from scipy.stats import qmc
+from scipy.stats import norm
 class Parameters:
     # financial parameters
     a: float = 0.0
@@ -16,11 +18,11 @@ class Parameters:
     e1_cost = tf.constant(0.9)
     e2_cost = tf.constant(0.9)
     omega = tf.cast(np.array([[0.5,0.5]]),dtype=tf.float32)
-    pi = tf.cast(np.array([[e1/(e1*omega[0,0]+e2*omega[0,1]),\
-                            e2/(e1*omega[0,0]+e2*omega[0,1])]]),dtype=tf.float32)
+    pi = tf.cast(np.array([[e1/(e1*omega[0][0]+e2*omega[0][1]),\
+                            e2/(e1*omega[0][0]+e2*omega[0][1])]]),dtype=tf.float32)
     print('pi = ', pi)
-    l1 = l1_m_mu1 - e1 + pi[0,0]*(omega[0,0]*e1*e1_cost + omega[0,1]*e2*e2_cost)
-    l2 = l2_m_mu2 - e2 + pi[0,1]*(omega[0,0]*e1*e1_cost + omega[0,1]*e2*e2_cost)
+    l1 = l1_m_mu1 - e1 + pi[0][0]*(omega[0][0]*e1*e1_cost + omega[0][1]*e2*e2_cost)
+    l2 = l2_m_mu2 - e2 + pi[0][1]*(omega[0][0]*e1*e1_cost + omega[0][1]*e2*e2_cost)
     l = tf.cast(np.array([[l1,l2]]),dtype=tf.float32)
     print('l = ', l)
 
@@ -30,18 +32,24 @@ class Parameters:
     mat_Q = tf.linalg.diag(tf.squeeze(Q))
     R = tf.cast(np.array([[0.1,0.1]]),dtype=tf.float32)
     mat_R = tf.linalg.diag(tf.squeeze(R))
-    S = tf.cast(np.array([[0.6,0.6]]),dtype=tf.float32)
-    mat_S = tf.linalg.diag(tf.squeeze(S))
 
-    k = tf.cast(np.array([[0.5,0.5]]),dtype=tf.float32)
+
+
+    gamma = tf.cast(np.array([[0.5, 3.0]]), dtype=tf.float32)
+    U_a = tf.cast(np.array([[1.0,1.0]]),dtype=tf.float32)
+    U_b = tf.cast(np.array([[5.0,5.0]]),dtype=tf.float32)
+    B = tf.cast(np.array([[2.5,2.5]]),dtype=tf.float32)
+
+    k = tf.cast(np.array([[0.08,0.08]]),dtype=tf.float32)
     K = tf.linalg.diag(tf.squeeze(k))
-    sig = tf.cast(np.array([[0.1,0.3]]),dtype=tf.float32)
+
+    sig = tf.cast(np.array([[0.3,0.3]]),dtype=tf.float32)
     Sig = tf.linalg.diag(tf.squeeze(sig))
-    gamma = tf.cast(np.array([[1.0,1.0]]),dtype=tf.float32)
     xi = tf.cast(np.array([[2.0,2.0]]),dtype=tf.float32)
 
-    lam = tf.constant(0.0)
+    lam = tf.constant(1.0)
     d = 0.05
+    Pi = tf.linalg.diag(tf.squeeze(pi)) @ np.array([[omega[0, 0] * (k[0, 0] - d), omega[0, 1] * (k[0, 1] - d)], [omega[0, 0] * (k[0, 0] - d), omega[0, 1] * (k[0, 1] - d)]])
     T: float = 1.0
     # path number
     N_1: int = 10000
@@ -51,11 +59,15 @@ class Parameters:
     # Brownian motion
     np.random.seed(1)
     dW_t = tf.cast(np.random.standard_normal((N_1, N_2, 2))*np.sqrt(del_t),dtype=tf.float32)
+    #sampler = qmc.Sobol(d=N_2, scramble=False)
+    #sampler.fast_forward(n=2 * N_2)
+    #sample = sampler.random(n=N_1)
+    #dW1_t = tf.cast(norm.ppf(sample)*np.sqrt(del_t),dtype=tf.float32)
+    #dW2_t = dW1_t
     # Neural network parameters
     lr_init_values = 0.5*pow(10.0, -3.0)
     num_hiddens = np.array([32,32,1])
     num_iterations: int = 1000
-
 
 class FeedForwardSubNet(tf.keras.Model):
     def __init__(self, para):
@@ -67,7 +79,7 @@ class FeedForwardSubNet(tf.keras.Model):
                                                    kernel_regularizer='l1l2',
                                                    bias_regularizer='l1l2',
                                                    kernel_initializer=tf.random_normal_initializer(mean=0.0,stddev=pow(10.0,-3.0),seed=1),
-                                                   bias_initializer=tf.random_normal_initializer(mean=(para.a+para.b)/2.0, stddev=pow(10.0, -2.0), seed=1),
+                                                   bias_initializer=tf.random_normal_initializer(mean=0.5,stddev=pow(10.0,-2.0),seed=1),
                                                    )
                              for i in range(len(para.num_hiddens))]
 
@@ -80,14 +92,11 @@ class FeedForwardSubNet(tf.keras.Model):
         x = self.dense_layers[-1](x)
         return x
 
-
-
-
 class opt_loss(tf.keras.Model):
     def __init__(self, para):
         super().__init__()
         self.para = para
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.para.lr_init_values)
+        #self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.para.lr_init_values)
         # initialize rnn trainable variables
         # nn for v1_bar
         self.nn1 = FeedForwardSubNet(para)
@@ -156,13 +165,17 @@ class opt_loss(tf.keras.Model):
                 0, 1] * v2_bar
             # v2 = tf.clip_by_value(v2, clip_value_min=self.para.a, clip_value_max=self.para.b)
 
-            #weight1 = (self.para.N_2 - j) / (self.para.N_2)
-            #weight2 = (self.para.N_2 - j) / (self.para.N_2)
+            # weight1 = (self.para.N_2 - j) / (self.para.N_2)
+            # weight2 = (self.para.N_2 - j) / (self.para.N_2)
             weight1 = 1.0
             weight2 = 1.0
-            p1_now = p1_now - (self.para.r * p1_now + (x1_now - z1_now * self.para.S[0, 0]) * self.para.Q[
-                0, 0]) * self.para.del_t \
+            x1_flag = tf.cast((x1_now>=0.0),dtype=tf.float32)
+            x2_flag = tf.cast((x2_now>=0.0),dtype=tf.float32)
+
+            p1_now = p1_now + (- self.para.r * p1_now - (x1_now - self.para.B[0, 0]) * self.para.Q[
+                0, 0] + self.para.U_a[0,0]*tf.pow(x1_flag*self.para.U_a[0,0]*x1_now/self.para.gamma[0,0]+self.para.U_b[0,0],-self.para.gamma[0,0]) ) * self.para.del_t \
                      + eta1 * tf.reshape(self.para.dW_t[:, j, 0], (self.para.N_1, 1))
+
 
             x1_now = x1_now + (self.para.r * x1_now + self.para.l[0, 0] - self.para.k[0, 0] * v1 +
                                (self.para.omega[0, 0] * (self.para.k[0, 0] - self.para.d) * v1_bar \
@@ -171,16 +184,15 @@ class opt_loss(tf.keras.Model):
                      + self.para.sig[0, 0] * (1.0 - v1) * tf.reshape(self.para.dW_t[:, j, 0], (self.para.N_1, 1))
 
             z1_now = z1_now + (self.para.r * z1_now + self.para.l[0, 0] - v1_bar * self.para.k[0, 0] + (
-                        self.para.omega[0, 0] * (self.para.k[0, 0] - self.para.d) * v1_bar \
-                        + self.para.omega[0, 1] * (self.para.k[0, 1] - self.para.d) * v2_bar) * self.para.pi[
+                    self.para.omega[0, 0] * (self.para.k[0, 0] - self.para.d) * v1_bar \
+                    + self.para.omega[0, 1] * (self.para.k[0, 1] - self.para.d) * v2_bar) * self.para.pi[
                                    0, 0]) * self.para.del_t
 
             penalty = penalty + tf.reduce_sum(weight1 * pow((tf.reduce_mean(v1) - v1_bar), 2.0))
-            # print('j = ', j, 'penalty1 = ', weight1*pow((tf.reduce_mean(v1)-v1_bar),2.0))
-            # print('j = ', j, 'variance1 = ', tf.math.reduce_variance(v1))
 
-            p2_now = p2_now - (self.para.r * p2_now + (x2_now - z2_now * self.para.S[0, 1]) * self.para.Q[
-                0, 1]) * self.para.del_t \
+
+            p2_now = p2_now + ( - self.para.r * p2_now - (x2_now - self.para.B[0, 1]) * self.para.Q[
+                0, 1]+ self.para.U_a[0,1]*tf.pow(x2_flag*self.para.U_a[0,1]*x2_now/self.para.gamma[0,1]+self.para.U_b[0,1],-self.para.gamma[0,1]) ) * self.para.del_t \
                      + eta2 * tf.reshape(self.para.dW_t[:, j, 1], (self.para.N_1, 1))
 
             x2_now = x2_now + (self.para.r * x2_now + self.para.l[0, 1] - self.para.k[0, 1] * v2 +
@@ -190,8 +202,8 @@ class opt_loss(tf.keras.Model):
                      + self.para.sig[0, 1] * (1.0 - v2) * tf.reshape(self.para.dW_t[:, j, 1], (self.para.N_1, 1))
 
             z2_now = z2_now + (self.para.r * z2_now + self.para.l[0, 1] - v2_bar * self.para.k[0, 1] + (
-                        self.para.omega[0, 0] * (self.para.k[0, 0] - self.para.d) * v1_bar \
-                        + self.para.omega[0, 1] * (self.para.k[0, 1] - self.para.d) * v2_bar) * self.para.pi[
+                    self.para.omega[0, 0] * (self.para.k[0, 0] - self.para.d) * v1_bar \
+                    + self.para.omega[0, 1] * (self.para.k[0, 1] - self.para.d) * v2_bar) * self.para.pi[
                                    0, 1]) * self.para.del_t
 
             penalty = penalty + tf.reduce_sum(weight2 * pow((tf.reduce_mean(v2) - v2_bar), 2.0))
@@ -211,10 +223,15 @@ class opt_loss(tf.keras.Model):
             list_v2.append(v2)
 
         penalty = penalty / tf.cast(self.para.N_2, dtype=tf.float32)
+        x1_flag = tf.cast((x1_now>=0.0),dtype=tf.float32)
+        x2_flag = tf.cast((x2_now>=0.0),dtype=tf.float32)
         loss = tf.reduce_mean(
-            pow(p1_now + self.para.gamma[0, 0] - (x1_now - z1_now * self.para.S[0, 0]) * self.para.Q[0, 0], 2.0) \
-            + pow(p2_now + self.para.gamma[0, 1] - (x2_now - z2_now * self.para.S[0, 1]) * self.para.Q[0, 1],
-                  2.0)) + self.para.lam * penalty
+            tf.pow(p1_now \
+                   + self.para.U_a[0,0]*tf.pow(x1_flag*self.para.U_a[0,0]*x1_now/self.para.gamma[0,0]+self.para.U_b[0,0],-self.para.gamma[0,0])\
+                   - (x1_now - self.para.B[0, 0]) * self.para.Q[0, 0], 2.0) \
+            + tf.pow(p2_now \
+                   + self.para.U_a[0,1]*tf.pow(x2_flag*self.para.U_a[0,1]*x2_now/self.para.gamma[0,1]+self.para.U_b[0,1],-self.para.gamma[0,1]) \
+                   - (x2_now - self.para.B[0, 1]) * self.para.Q[0, 1],2.0)) + self.para.lam * penalty
         return loss, penalty, list_x1, list_z1, list_p1, list_eta1, list_v1_bar, list_v1, list_x2, list_z2, list_p2, list_eta2, list_v2_bar, list_v2
 
 
@@ -222,12 +239,7 @@ class solver():
     def __init__(self, para):
         self.model = opt_loss(para)
         self.para = para
-        lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-            self.para.lr_init_values,
-            decay_steps=self.para.num_iterations,
-            decay_rate=0.96,
-            staircase=True)
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.para.lr_init_values)
 
     def train(self):
         start_time = time.time()
@@ -235,15 +247,21 @@ class solver():
         losses = []
         for step in range(self.para.num_iterations):
             # compute gradient
+            #Step 1: compute loss
             with tf.GradientTape(persistent=True) as tape:
                 loss, penalty, list_x1, list_z1, list_p1, list_eta1, list_v1_bar, list_v1, list_x2, list_z2, list_p2, list_eta2, list_v2_bar, list_v2 = self.model.loss_fn()
+            #Step 2: calculate the gradient
             grad = tape.gradient(loss, self.model.trainable_variables)
 
             # save intermediate result for loss figures
             elapsed_time = time.time() - start_time
-            #print("step = ", step, "loss = ", loss.numpy(), "penalty = ", penalty.numpy(), "elapsed time = ", elapsed_time)
+            print("step = ", step, "loss = ", loss.numpy(), "penalty = ", penalty.numpy(), "elapsed time = ", elapsed_time)
+            #print("vbar0_1 = ", list_v1_bar[0][0].numpy(), "vbar0_2 = ", list_v2_bar[0][0].numpy())
+            #print("vbarT_1 = ", list_v1_bar[-1][0].numpy(), "vbarT_2 = ", list_v2_bar[-1][0].numpy())
+            #print("p0_1 = ", list_p1[0][0].numpy(), "p0_2 = ", list_p2[0][0].numpy())
+            #print("eta0_1 = ", list_eta1[0][0].numpy(), "eta0_2 = ", list_eta2[0][0].numpy())
 
-            # Update gradient
+            # Step 3: Update gradient
             self.optimizer.apply_gradients(zip(grad, self.model.trainable_variables))
             iterations.append(step)
             losses.append(loss)
@@ -251,86 +269,98 @@ class solver():
         loss, penalty, list_x1, list_z1, list_p1, list_eta1, list_v1_bar, list_v1, list_x2, list_z2, list_p2, list_eta2, list_v2_bar, list_v2 = self.model.loss_fn()
         # save the final result
         elapsed_time = time.time() - start_time
-        #print("step = ", step, "loss = ", loss.numpy(), "penalty = ", penalty.numpy(), "elapsed time = ", elapsed_time)
-        # compute ODE error
-        with open('case1a_non_constrained_ODE.pickle', 'rb') as dualfile2:
-            ODE_list_Gamma, ODE_list_Xi, ODE_list_zeta, ODE_list_z, ODE_list_pbar, ODE_list_vbar = pickle.load(
-                dualfile2)
+        print("step = ", step, "loss = ", loss.numpy(), "penalty = ", penalty.numpy(), "elapsed time = ", elapsed_time)
+        iterations.append(step)
+        losses.append(loss)
+        print("Save result")
+        with open('case5_unconstrained.pickle', 'wb') as dualfile:
+            pickle.dump([iterations, losses, loss, penalty, list_x1, list_z1, list_p1, list_eta1, list_v1_bar, list_v1, list_x2, list_z2, list_p2, list_eta2, list_v2_bar, list_v2,  self.model.trainable_variables, elapsed_time], dualfile)
+        print("Result saved!")
 
-        ODE_list_vbar_1 = [row[0, 0] for row in ODE_list_vbar]
-        ODE_list_vbar_2 = [row[1, 0] for row in ODE_list_vbar]
-        ODE_list_z_1 = [row[0, 0] for row in ODE_list_z[:-1]]
-        ODE_list_z_2 = [row[1, 0] for row in ODE_list_z[:-1]]
+    def plot(self):
+        with open('case5_unconstrained.pickle', 'rb') as dualfile2:
+            iterations, losses, loss, penalty, list_x1, list_z1, list_p1, list_eta1, list_v1_bar, list_v1, list_x2, list_z2, list_p2, list_eta2, list_v2_bar, list_v2, train_var, elapsed_time = pickle.load(dualfile2)
 
-        #abs_error
-        abs_error = tf.constant(0.0)
-        for a_i, b_i in zip(list_v1_bar, ODE_list_vbar_1):
-            abs_error = abs_error + tf.math.abs(a_i - b_i)
-        for a_i, b_i in zip(list_v2_bar, ODE_list_vbar_2):
-            abs_error = abs_error + tf.math.abs(a_i - b_i)
-        for a_i, b_i in zip(list_z1, ODE_list_z_1):
-            abs_error = abs_error + tf.math.abs(a_i - b_i)
-        for a_i, b_i in zip(list_z2, ODE_list_z_2):
-            abs_error = abs_error + tf.math.abs(a_i - b_i)
-        abs_error = abs_error / tf.cast(self.para.N_2, dtype=tf.float32)/4.0
+        print("vbar_1 = ", list_v1_bar[0][0].numpy(), "vbar_2 = ", list_v2_bar[0][0].numpy())
+        print("p0_1 = ", list_p1[0][0].numpy(), "p0_2 = ", list_p2[0][0].numpy())
+        print("eta0_1 = ", list_eta1[0][0].numpy(), "eta0_2 = ", list_eta2[0][0].numpy())
 
-        #relative error
-        rel_error = tf.constant(0.0)
-        max_b = tf.reduce_max(tf.abs(ODE_list_vbar_1))
-        min_b = tf.reduce_min(ODE_list_vbar_1)
-        for a_i, b_i in zip(list_v1_bar, ODE_list_vbar_1):
-            rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
-        max_b = tf.reduce_max(tf.abs(ODE_list_vbar_2))
-        min_b = tf.reduce_min(ODE_list_vbar_2)
-        for a_i, b_i in zip(list_v2_bar, ODE_list_vbar_2):
-            rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
-        max_b = tf.reduce_max(tf.abs(ODE_list_z_1))
-        min_b = tf.reduce_min(ODE_list_z_1)
-        for a_i, b_i in zip(list_z1, ODE_list_z_1):
-            rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
-        max_b = tf.reduce_max(tf.abs(ODE_list_z_2))
-        min_b = tf.reduce_min(ODE_list_z_2)
-        for a_i, b_i in zip(list_z2, ODE_list_z_2):
-            rel_error = rel_error + tf.math.abs((a_i - b_i)/max_b)
-        rel_error = rel_error / tf.cast(self.para.N_2, dtype=tf.float32)/4.0
+        z1_T = tf.reduce_mean(list_x1, axis=1)[-1]
+        obj1_T = self.para.gamma[0, 0] * list_x1[-1] - 0.5 * self.para.Q[0, 0] * pow(
+            list_x1[-1] - self.para.B[0, 0], 2.0)
+        E_obj1_T = tf.reduce_mean(obj1_T)
 
-        return loss, penalty, abs_error, rel_error, elapsed_time, list_v1_bar, list_v2_bar, list_z1, list_z2
+        z2_T = tf.reduce_mean(list_x2, axis=1)[-1]
+        obj2_T = self.para.gamma[0, 1] * list_x2[-1] - 0.5 * self.para.Q[0, 1] * pow(
+            list_x2[-1] - self.para.B[0, 1], 2.0)
+        E_obj2_T = tf.reduce_mean(obj2_T)
+        print("lam = ", self.para.lam.numpy())
+        print('list_v1_bar0 = ', list_v1_bar[0].numpy(), 'list_v1_barT = ', list_v1_bar[-1].numpy())
+        print('list_v2_bar0 = ', list_v2_bar[0].numpy(), 'list_v2_barT = ', list_v2_bar[-1].numpy())
+
+        print("loss = ", loss.numpy())
+        print("penalty = ", penalty.numpy())
+        print("time elapsed = ", elapsed_time)
+        #print('z1_T = ', z1_T[-1].numpy(), 'x1_5q = ', np.percentile(list_x1[-1], 5.0, axis=0), \
+        #      'x1_95q = ', np.percentile(list_x1[-1], 95.0, axis=0), \
+        #      'x1 gap = ', np.percentile(list_x1[-1], 95.0, axis=0) - np.percentile(list_x1[-1], 5.0, axis=0))
+        #print('z2_T = ', z2_T[-1].numpy(), 'x2_5q = ', np.percentile(list_x2[-1], 5.0, axis=0), \
+        #      'x2_95q = ', np.percentile(list_x2[-1], 95.0, axis=0), 'x2 gap = ',
+        #      np.percentile(list_x2[-1], 95.0, axis=0) - np.percentile(list_x2[-1], 5.0, axis=0))
+
+        vec_t = np.arange(0, self.para.N_2-1) * self.para.del_t
+        plt.figure(figsize=(8, 6))
+        list_v_bar_1 = [row[0] for row in list_v1_bar]
+        plt.plot(vec_t, list_v_bar_1,'b',label=r'$\bar{v}^1_t(\gamma^1=0.5)$',linewidth=2.5)
+        list_v_bar_2 = [row[0] for row in list_v2_bar]
+        plt.plot(vec_t, list_v_bar_2,color=[0.9290,0.6940,0.1250],label=r'$\bar{v}^2_t(\gamma^2=3.0)$',linewidth=2.5)
+        plt.legend(prop = { "size": 15 })
+        #plt.xlim(left=tf.reduce_min(vec_t))
+        #plt.xlim(right=tf.reduce_max(vec_t))
+        #plt.ylim(bottom=-0.06862408)
+        #plt.ylim(top=0.40320972)
+        plt.xlabel(r'$t$')
+        #plt.ylabel(r'$E[\theta_1]$')
+        # plt.title('Expected theta')
+        plt.show()
+
+
+        vec_t = np.arange(0, self.para.N_2) * self.para.del_t
+        #list_z1 = tf.reduce_mean(list_x1, axis=1)
+        #list_z2 = tf.reduce_mean(list_x2, axis=1)
+        plt.figure(figsize=(8, 6))
+        list_z_1 = [row[0] for row in list_z1]
+        plt.plot(vec_t, list_z_1,'b',label=r'$z^1_t(\gamma^1=0.5)$',linewidth=2.5)
+        list_z_2 = [row[0] for row in list_z2]
+        plt.plot(vec_t, list_z_2,color=[0.9290,0.6940,0.1250],label=r'$z^2_t(\gamma^2=3.0)$',linewidth=2.5)
+        plt.legend(prop = { "size": 15 })
+        plt.xlim(left=tf.reduce_min(vec_t))
+        plt.xlim(right=tf.reduce_max(vec_t))
+        #plt.ylim(bottom=2.0)
+        #plt.ylim(top=2.2424707)
+        plt.xlabel(r'$t$')
+        #plt.ylabel(r'$E[\theta_1]$')
+        # plt.title('Expected theta')
+        plt.show()
+        print('min_z1z2 = ', tf.reduce_min(tf.concat([list_z_1,list_z_2],axis=0)).numpy())
+        print('max_z1z2 = ', tf.reduce_max(tf.concat([list_z_1,list_z_2],axis=0)).numpy())
 
 
 if __name__ == '__main__':
     para = Parameters()
-    vec_lam = tf.cast(np.array([0.1,1.0,10.0,100.0,1000.0]),dtype=tf.float32)
-    #read
-    #ans_list = np.zeros((5, 5))
-    #for j in range(5):
-    #    with open('lam{}_case2a_non_constrained.pickle'.format(j), 'rb') as dualfile:
-    #        [loss, penalty, abs_error, rel_error, elapsed_time, list_v1_bar, list_v2_bar, list_z1, list_z2] = pickle.load(
-    #            dualfile)
-    #    ans_list[0, j] = loss
-    #    ans_list[1, j] = penalty
-    #    ans_list[2, j] = abs_error
-    #    ans_list[3, j] = rel_error
-    #    ans_list[4, j] = elapsed_time
 
-    #    print("Result saved!")
+    # check condition
+    print("Pi = ", para.Pi)
+    mat_M = para.Pi @ tf.linalg.inv(para.Pi - para.K)
+    mat_B = tf.transpose(mat_M) @ mat_M
+    mat_A = (mat_B + tf.transpose(mat_B)) / 2.0
+    eigen_mat_A = tf.sqrt(tf.reduce_max(tf.cast(tf.linalg.eigvals(mat_A),dtype=tf.float32)))
+    print("spectral norm of M = ", eigen_mat_A.numpy())
+    print("LHS Q^1 = ", para.Q[0,0])
+    print("RHS 1 = ", eigen_mat_A*(para.Q[0,0]+tf.pow(para.U_a[0,0],2.0)/tf.pow(para.U_b[0,0],1.0+para.gamma[0,0])))
+    print("LHS Q^2 = ", para.Q[0,1])
+    print("RHS 2 = ", eigen_mat_A*(para.Q[0,1]+tf.pow(para.U_a[0,1],2.0)/tf.pow(para.U_b[0,1],1.0+para.gamma[0,1])))
 
-    #print("ans_list = ", ans_list)
-
-
-    #write
-    ans_list = np.zeros((5,5))
-    for j in range(5):
-        para.lam = vec_lam[j]
-        MVBSDE_solver = solver(para)
-        [loss, penalty, abs_error, rel_error, elapsed_time,  list_v1_bar, list_v2_bar, list_z1, list_z2] = MVBSDE_solver.train()
-        ans_list[0,j] = loss
-        ans_list[1,j] = penalty
-        ans_list[2,j] = abs_error
-        ans_list[3,j] = rel_error
-        ans_list[4,j] = elapsed_time
-        print("lambda = ", para.lam.numpy(), "abs_error = ", abs_error.numpy(), "rel_error = ", rel_error.numpy(), "time_elapsed = ", elapsed_time)
-        with open('lam{}_case1a_non_constrained.pickle'.format(j), 'wb') as dualfile:
-            pickle.dump([loss, penalty, abs_error, rel_error, elapsed_time,  list_v1_bar, list_v2_bar, list_z1, list_z2], dualfile)
-        print("Result saved!")
-
-    print("ans_list = ", ans_list)
+    MVBSDE_solver = solver(para)
+    MVBSDE_solver.train()
+    MVBSDE_solver.plot()

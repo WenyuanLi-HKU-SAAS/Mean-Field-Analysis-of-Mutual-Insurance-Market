@@ -6,7 +6,20 @@ import matplotlib.pyplot as plt
 class Parameters:
     # financial parameters
     r: float = 0.03
-    l = tf.cast(np.array([[0.02],[0.2]]),dtype=tf.float32)
+    l1_m_mu1 = tf.constant(0.02)
+    l2_m_mu2 = tf.constant(0.02)
+    e1 = tf.constant(0.01)
+    e2 = tf.constant(0.01)
+    e1_cost = tf.constant(0.9)
+    e2_cost = tf.constant(0.9)
+    omega = tf.cast(np.array([[0.5],[0.5]]),dtype=tf.float32)
+    pi = tf.cast(np.array([[e1/(e1*omega[0,0]+e2*omega[1,0])],\
+                            [e2/(e1*omega[0,0]+e2*omega[1,0])]]),dtype=tf.float32)
+    print('pi = ', pi)
+    l1 = l1_m_mu1 - e1 + pi[0,0]*(omega[0,0]*e1*e1_cost + omega[1,0]*e2*e2_cost)
+    l2 = l2_m_mu2 - e2 + pi[1,0]*(omega[0,0]*e1*e1_cost + omega[1,0]*e2*e2_cost)
+    l = tf.cast(np.array([[l1.numpy()],[l2.numpy()]]),dtype=tf.float32)
+    print('l = ', l)
     mat_P = tf.cast(np.array([[1.0,0.0],[0.0,1.0]]),dtype=tf.float32)
     mat_Q = tf.cast(np.array([[1.0,0.0],[0.0,1.0]]),dtype=tf.float32)
     mat_R = tf.cast(np.array([[0.1,0.0],[0.0,0.1]]),dtype=tf.float32)
@@ -18,9 +31,7 @@ class Parameters:
     Sig = tf.linalg.diag(tf.squeeze(sig))
     gamma = tf.cast(np.array([[1.0],[1.0]]),dtype=tf.float32)
     x0 = tf.cast(np.array([[2.0],[2.0]]),dtype=tf.float32)
-    omega = tf.cast(np.array([[0.5],[0.5]]),dtype=tf.float32)
-    pi = tf.cast(np.array([[1.0],[1.0]]),dtype=tf.float32)
-    d: float = 0.05
+    d = 0.05
     Pi = tf.linalg.diag(tf.squeeze(pi)) @ np.array([[omega[0, 0] * (k[0, 0] - d), omega[1, 0] * (k[1, 0] - d)], [omega[0, 0] * (k[0, 0] - d), omega[1, 0] * (k[1, 0] - d)]])
     T: float = 1.0
     # time steps
@@ -45,25 +56,24 @@ class opt_loss(tf.keras.Model):
         list_b = []
         print("upper_bar = ", (1.0-self.para.mat_S[0,0])/2.0)
         #check condition
-        mat_M = self.para.Pi*tf.linalg.inv(self.para.Pi-self.para.K)
-        spectral_norm_mat_M = tf.norm(mat_M,ord=2.0)
-        print("spectral_norm_mat_M = ", spectral_norm_mat_M.numpy())
+        mat_M = self.para.Pi@tf.linalg.inv(self.para.Pi-self.para.K)
+        mat_one_minus_M = tf.transpose(mat_M)@mat_M
+        mat_A = (mat_one_minus_M + tf.transpose(mat_one_minus_M))/2.0
+        eigen_mat_A = tf.sqrt(tf.linalg.eigvals(mat_A))
+        print("spectral norm of M = ", eigen_mat_A.numpy())
 
-        eigen_minus_mat_M = tf.linalg.eigvals(-mat_M)
-        print("eigen_minus_mat_M = ", eigen_minus_mat_M.numpy())
+        mat_M = self.para.Pi@tf.linalg.inv(self.para.Pi-self.para.K)
+        mat_one_minus_M = tf.transpose(mat_one - mat_M)@(mat_one - mat_M)
+        mat_A = (mat_one_minus_M + tf.transpose(mat_one_minus_M))/2.0
+        eigen_mat_A = tf.linalg.eigvals(mat_A)
+        print("eigen_assumption51c = ", eigen_mat_A.numpy())
 
-        eigen_one_minus_mat_M = tf.linalg.eigvals(mat_one-mat_M)
-        print("eigen_one_minus_mat_M = ", eigen_one_minus_mat_M.numpy())
-
-        eigen_one_minus_S_M = tf.linalg.eigvals(mat_one - 0.6*mat_M)
-        print("eigen_one_minus_S_M = ", eigen_one_minus_S_M.numpy())
-
-        assump_5_1_3 = tf.linalg.eigvals(self.para.mat_Q*(mat_one-self.para.mat_S)*(mat_one-mat_M))
-        print("assump_5_1_3 = ", assump_5_1_3.numpy())
-
-        assump_5_1_4 = tf.linalg.eigvals(self.para.mat_Q - self.para.mat_Q * (mat_one - self.para.mat_S) * (mat_one - mat_M))
-        print("assump_5_1_4 = ", assump_5_1_4.numpy())
-
+        mat_B = (mat_one-tf.transpose(self.para.Pi*tf.linalg.inv(self.para.Pi-self.para.K)))\
+                @self.para.mat_Q@(mat_one-self.para.mat_S)
+        mat_B = tf.transpose(mat_B)@mat_B
+        mat_A = (mat_B+ tf.transpose(mat_B))/2.0
+        eigen_mat_A = tf.linalg.eigvals(mat_A)
+        print("eigen_assumption51d = ", eigen_mat_A.numpy())
 
         Gamma_now = tf.constant(self.para.mat_Q)
         list_Gamma.append(Gamma_now)
