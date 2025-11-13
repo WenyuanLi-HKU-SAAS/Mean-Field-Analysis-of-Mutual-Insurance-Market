@@ -9,4 +9,8 @@ These are the codes for the paper ``Mean-Field-Analysis-of-Mutual-Insurance-Mark
 
 ``main_constrained.py'' is computing the single case under constrained settings
 
+``main_utility_non_constrained.py'' is computing the single case under non-constrained settings with utility objective
+
+``main_utility_constrained.py'' is computing the single case under constrained settings with utility objective
+
 ``main_plot.py'' is for plotting figures.
